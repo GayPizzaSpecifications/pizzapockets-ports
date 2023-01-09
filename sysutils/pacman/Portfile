@@ -1,0 +1,55 @@
+# BARELY tested and provided entirely *at your own risk*
+# Do NOT install any package not intended for macos or that
+# doesn't install to some "safe" location like /opt/blah
+# If this eats your system don't say I didn't warn you
+PortSystem          1.0
+PortGroup           meson 1.0
+
+name                pacman
+version             6.0.2
+license             GPL-2+
+description         Binary package manager
+long_description    Library-based package manager with dependency support
+
+categories          sysutils net
+platforms           darwin
+homepage            https://archlinux.org/pacman/
+
+master_sites        https://sources.archlinux.org/other/pacman
+use_xz              yes
+checksums           rmd160  8b8659134a3b7f17d634b4c49fd76edfa28b57f0 \
+                    sha256  7d8e3e8c5121aec0965df71f59bedf46052c6cf14f96365c4411ec3de0a4c1a5 \
+                    size    880868
+
+depends_build       port:pkgconfig \
+                    port:bash \
+                    port:asciidoc
+
+depends_lib         port:gettext-runtime \
+                    port:libarchive \
+                    port:curl \
+                    port:gpgme
+
+configure.args-append \
+                    --prefix=${prefix} \
+                    --sysconfdir=${prefix}/etc \
+                    --localstatedir=${prefix}/var
+
+post-patch {
+  # Use MacPorts python3
+  reinplace "s|find_installation('python3')|find_installation('${configure.python}')|" ${worksrcpath}/meson.build
+  # Search for gexttext's libintl in MacPorts prefix
+  reinplace -E "s|(libintl = cc\\.find_library\\('intl', required\[\[:blank:\]\]?: false, static: get_option\\('buildstatic'\\))|\\1, dirs: \['/opt/local/lib'\]|" \
+      ${worksrcpath}/meson.build
+  # Work around test that creates broken definition
+  reinplace -E "s|(if conf.has\\('HAVE_STRUCT_STATVFS_F_FLAG'\\))|\\1 and build_machine.system() != 'darwin'|" ${worksrcpath}/meson.build
+  # libintl is not static in MacPorts, so add it to deps to avoid linker errors
+  reinplace "s|dependencies : \\\[libarchive\\\]|dependencies : \[libarchive, libintl\]|" ${worksrcpath}/meson.build
+  # Unix is a fucking blight
+  reinplace "s|/bin/true|/usr/bin/true|" ${worksrcpath}/doc/meson.build
+}
+
+post-destroot {
+  # Conflict with port:bash-completions
+  delete ${destroot}${prefix}/share/bash-completion/completions/makepkg
+}
